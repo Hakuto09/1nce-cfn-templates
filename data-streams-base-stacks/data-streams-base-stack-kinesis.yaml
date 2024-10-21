@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Base stack for 1NCE Data Streamer Kinesis to get started'
+Parameters:
+  KinesisStreamName:
+    Type: String
+    Default: 1nce-data-stream
+    Description: Enter the Kinesis Stream name. This will be prefixed by your account id.
+    MaxLength: 50
+  DatastreamerRoleARN:
+    Type: String
+    Default: arn:aws:iam::884047677700:role/1nce-datastreamer
+    Description: The 1nce role that will be allowed to assume the role defined here with the purpose of submitting data. This role most likely doesn't change.
+  AllowedExternalID:
+    Type: String
+    Description: Enter external ID that matches the 1NCE internal Organisation ID. It follows the structure of org-1234. When creating via the Customer Portal it will be automaticall added.
+Resources:
+  KinesisStream:
+    Type: 'AWS::Kinesis::Stream'
+    Properties:
+      ShardCount: 1
+
+  DataStreamerRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Ref DatastreamerRoleARN
+            Action:
+              - 'sts:AssumeRole'
+            Condition: 
+              "ForAnyValue:StringEquals": 
+                "sts:ExternalId":
+                  - !Ref AllowedExternalID
+      Policies:
+        - PolicyName: !Join ['-', ['allow-write-1nce', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'Kinesis:PutRecord'
+                  - 'Kinesis:PutRecords'
+                Resource: !Sub 'arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${KinesisStream}'
+
+  KinesisStreamNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: !Ref KinesisStream
+      Description: The name of the 1nce data streamer kinesis stream
+      Tags:
+        heritage: cloudformation
+
+  DataStreamerRoleParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Value: !GetAtt DataStreamerRole.Arn
+      Description: The Data Streamer IAM Role of the 1nce data streamer kinesis stream
+      Tags:
+        heritage: cloudformation
+
+Outputs:
+  AWSRegion:
+    Description: AWS Region for the Data Streamer. Input in 1NCE Portal during configuration.
+    Value: !Ref "AWS::Region"
+  StreamName:
+    Description: Kinesis Stream Name for the Data Streamer. Input in 1NCE Portal during configuration.
+    Value: !Ref KinesisStream
+  IAMRoleARN:
+    Description: IAM Role ARN for the Data Streamer. Input in 1NCE Portal during configuration.
+    Value: !GetAtt DataStreamerRole.Arn
